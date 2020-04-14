@@ -48,6 +48,7 @@ Create custom resource for a compute node which specifies the needed information
     kind: ComputeOpenStack
     metadata:
       name: example-computeopenstack
+      namespace: openshift-machine-api
     spec:
       # Add fields here
       roleName: worker-osp

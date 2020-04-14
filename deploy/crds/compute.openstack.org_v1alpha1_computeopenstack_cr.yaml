@@ -2,6 +2,7 @@ apiVersion: compute.openstack.org/v1alpha1
 kind: ComputeOpenStack
 metadata:
   name: example-computeopenstack
+  namespace: openshift-machine-api
 spec:
   # Add fields here
   roleName: worker-osp

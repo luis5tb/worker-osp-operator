@@ -1,8 +1,9 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   creationTimestamp: null
   name: worker-osp-operator
+  namespace: openshift-machine-api
 rules:
 - apiGroups:
   - ""
@@ -79,7 +80,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - machine.openshift.io 
+  - machine.openshift.io
+  resources:
+    - '*'
+  verbs:
+    - '*'
+- apiGroups:
+  - machineconfiguration.openshift.io
   resources:
     - '*'
   verbs:
