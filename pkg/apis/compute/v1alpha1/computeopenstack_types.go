@@ -26,6 +26,16 @@ type ComputeOpenStackSpec struct {
 	Workers int32 `json:"workers,omitempty"`
 	// Cores Pinning
 	CorePinning string `json:"corePinning,omitempty"`
+	// Infra DaemonSets needed
+	InfraDaemonSets []InfraDaemonSet `json:"infraDaemonSets,omitempty"`
+}
+
+// InfraDaemonSet defines the daemon set required
+type InfraDaemonSet struct {
+	// Namespace
+	Namespace string `json:"namespace"`
+	// Name
+	Name string `json:"name"`
 }
 
 // ComputeOpenStackStatus defines the observed state of ComputeOpenStack

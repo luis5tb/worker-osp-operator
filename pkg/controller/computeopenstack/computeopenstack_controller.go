@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 
 	computev1alpha1 "github.com/luis5tb/worker-osp-operator/pkg/apis/compute/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	machinev1beta1 "github.com/openshift/cluster-api/pkg/apis/machine/v1beta1"
+	//"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -177,8 +179,91 @@ func (r *ReconcileComputeOpenStack) Reconcile(request reconcile.Request) (reconc
 		}
 	}
 
-	// create node-exporter (to have monitoring information)
-	// cerate machine-config-daemon (to allow reconfigurations)
-	// create multus pod (to set the node to ready)
+	// create node-exporter daemonset (to have monitoring information)
+	// create machine-config-daemon daemonset(to allow reconfigurations)
+	// create multus daemonset (to set the node to ready)
+	if err := createInfraDaemonsets(context.TODO(), r.client, instance); err != nil {
+		log.Error(err, "Failed to create the infra daemon sets")
+		return reconcile.Result{}, err
+	}
 	return reconcile.Result{}, nil
+}
+
+
+func createInfraDaemonsets(ctx context.Context, client client.Client, instance *computev1alpha1.ComputeOpenStack) error {
+	for _, dsInfo := range instance.Spec.InfraDaemonSets {
+		originDaemonSet := &appsv1.DaemonSet{}
+		err := client.Get(context.TODO(), types.NamespacedName{Name: dsInfo.Name, Namespace: dsInfo.Namespace}, originDaemonSet)
+		if err != nil && errors.IsNotFound(err) {
+			log.Error(err, "Failed to find the daemon set", dsInfo.Name, dsInfo.Namespace)
+			return err
+		} else if err != nil {
+			return err
+		} /*else {
+			ospDaemonSet := &appsv1.DaemonSet{}
+			ospDaemonSetName := dsInfo.Name + "-" + instance.Spec.RoleName
+			err = client.Get(context.TODO(), types.NamespacedName{Name: ospDaemonSetName, Namespace: dsInfo.Namespace}, ospDaemonSet)
+			if err != nil && errors.IsNotFound(err) {
+				// Creating a new Daemonset ospDaemonSetName
+				ds := newDaemonSet(instance, originDaemonSet, ospDaemonSetName, dsInfo.Namespace)
+				err = client.Create(context.TODO(), ds)
+				if err != nil {
+					log.Error(err, "Error creating Daemonset", ospDaemonSetName)
+					return err
+				}
+			} else if err != nil {
+				log.Error(err, "Error getting Daemonset:", ospDaemonSetName)
+				return err
+			} else {
+				// Updating the Daemonset ospDaemonSetName
+				ds := newDaemonSet(instance, originDaemonSet, ospDaemonSetName, dsInfo.Namespace)
+
+				// Updating existing
+				// Merge the desired object with what actually exists
+				if !equality.Semantic.DeepEqual(ospDaemonSet.Spec, ds.Spec) {
+					if err := client.Update(ctx, ds); err != nil {
+						log.Error(err, "could not update object", ospDaemonSetName)
+						return err
+					}
+				}
+			}
+		}*/
+	}
+	return nil
+}
+
+func newDaemonSet(instance *computev1alpha1.ComputeOpenStack, ds *appsv1.DaemonSet, name string, namespace string) *appsv1.DaemonSet {
+	daemonSet := appsv1.DaemonSet{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "DaemonSet",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: ds.Spec,
+	}
+
+	// Set OwnerReference
+	oref := metav1.NewControllerRef(instance, instance.GroupVersionKind())
+	daemonSet.SetOwnerReferences([]metav1.OwnerReference{*oref})
+
+	// Update template name
+	daemonSet.Spec.Template.ObjectMeta.Name = name
+
+	// Add toleration
+	tolerationSpec := corev1.Toleration{
+		Operator: "Equal",
+		Effect: "NoSchedule",
+		Key: "dedicated",
+		Value: instance.Spec.RoleName,
+	}
+	daemonSet.Spec.Template.Spec.Tolerations = append(daemonSet.Spec.Template.Spec.Tolerations, tolerationSpec)
+
+	// Change nodeSelector
+	nodeSelector := "node-role.kubernetes.io/" + instance.Spec.RoleName
+	daemonSet.Spec.Template.Spec.NodeSelector = map[string]string{nodeSelector: ""}
+
+	return &daemonSet
 }

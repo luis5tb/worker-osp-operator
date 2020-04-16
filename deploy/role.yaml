@@ -3,11 +3,11 @@ kind: ClusterRole
 metadata:
   creationTimestamp: null
   name: worker-osp-operator
-  namespace: openshift-machine-api
 rules:
 - apiGroups:
   - ""
   resources:
+  - namespaces
   - pods
   - services
   - services/finalizers

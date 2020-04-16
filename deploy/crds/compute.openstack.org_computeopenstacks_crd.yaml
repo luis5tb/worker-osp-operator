@@ -43,6 +43,22 @@ spec:
             corePinning:
               description: Cores Pinning
               type: string
+            infraDaemonSets:
+              description: Infra DaemonSets needed
+              items:
+                description: InfraDaemonSet defines the daemon set required
+                properties:
+                  name:
+                    description: Name
+                    type: string
+                  namespace:
+                    description: Namespace
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+              type: array
             k8sServiceIp:
               description: Kubernetes service cluster IP
               type: string
