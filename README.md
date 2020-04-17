@@ -58,6 +58,13 @@ Create custom resource for a compute node which specifies the needed information
       apiIntIp: 192.168.111.5
       workers: 1
       corePinning: "4-7"   # Optional
+      infraDaemonSets:     # Optional
+      - name: multus
+        namespace: openshift-multus
+      - name: node-exporter
+        namespace: openshift-monitoring
+      - name: machine-config-daemon
+        namespace: openshift-machine-config-operator
 
 Apply the CR:
 

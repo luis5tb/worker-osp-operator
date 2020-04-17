@@ -17,7 +17,7 @@ spec:
       containers:
         - name: worker-osp-operator
           # Replace this with the built image name
-          image: quay.io/ltomasbo/compute-operator:v0.0.1
+          image: quay.io/ltomasbo/compute-operator:v0.0.2
           command:
           - worker-osp-operator
           imagePullPolicy: Always

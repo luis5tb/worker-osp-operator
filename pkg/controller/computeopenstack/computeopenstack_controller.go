@@ -6,18 +6,20 @@ import (
 	"encoding/json"
 	"strings"
 	"path/filepath"
+	"os"
 
 	computev1alpha1 "github.com/luis5tb/worker-osp-operator/pkg/apis/compute/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	machinev1beta1 "github.com/openshift/cluster-api/pkg/apis/machine/v1beta1"
-	//"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	//"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -46,7 +48,17 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComputeOpenStack{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	cfg, err := config.GetConfig()
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+	kclient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+	return &ReconcileComputeOpenStack{client: mgr.GetClient(), scheme: mgr.GetScheme(), kclient: kclient}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -85,6 +97,7 @@ type ReconcileComputeOpenStack struct {
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
+	kclient kubernetes.Interface
 }
 
 // Reconcile reads that state of the cluster for a ComputeOpenStack object and makes changes based on the state read
@@ -182,7 +195,7 @@ func (r *ReconcileComputeOpenStack) Reconcile(request reconcile.Request) (reconc
 	// create node-exporter daemonset (to have monitoring information)
 	// create machine-config-daemon daemonset(to allow reconfigurations)
 	// create multus daemonset (to set the node to ready)
-	if err := createInfraDaemonsets(context.TODO(), r.client, instance); err != nil {
+	if err := createInfraDaemonsets(context.TODO(), r.kclient, instance); err != nil {
 		log.Error(err, "Failed to create the infra daemon sets")
 		return reconcile.Result{}, err
 	}
@@ -190,23 +203,23 @@ func (r *ReconcileComputeOpenStack) Reconcile(request reconcile.Request) (reconc
 }
 
 
-func createInfraDaemonsets(ctx context.Context, client client.Client, instance *computev1alpha1.ComputeOpenStack) error {
+func createInfraDaemonsets(ctx context.Context, client kubernetes.Interface, instance *computev1alpha1.ComputeOpenStack) error {
 	for _, dsInfo := range instance.Spec.InfraDaemonSets {
 		originDaemonSet := &appsv1.DaemonSet{}
-		err := client.Get(context.TODO(), types.NamespacedName{Name: dsInfo.Name, Namespace: dsInfo.Namespace}, originDaemonSet)
+		originDaemonSet, err := client.AppsV1().DaemonSets(dsInfo.Namespace).Get(dsInfo.Name, metav1.GetOptions{})
 		if err != nil && errors.IsNotFound(err) {
 			log.Error(err, "Failed to find the daemon set", dsInfo.Name, dsInfo.Namespace)
 			return err
 		} else if err != nil {
 			return err
-		} /*else {
+		} else {
 			ospDaemonSet := &appsv1.DaemonSet{}
 			ospDaemonSetName := dsInfo.Name + "-" + instance.Spec.RoleName
-			err = client.Get(context.TODO(), types.NamespacedName{Name: ospDaemonSetName, Namespace: dsInfo.Namespace}, ospDaemonSet)
+			ospDaemonSet, err = client.AppsV1().DaemonSets(dsInfo.Namespace).Get(ospDaemonSetName, metav1.GetOptions{})
 			if err != nil && errors.IsNotFound(err) {
 				// Creating a new Daemonset ospDaemonSetName
 				ds := newDaemonSet(instance, originDaemonSet, ospDaemonSetName, dsInfo.Namespace)
-				err = client.Create(context.TODO(), ds)
+				_, err := client.AppsV1().DaemonSets(dsInfo.Namespace).Create(ds)
 				if err != nil {
 					log.Error(err, "Error creating Daemonset", ospDaemonSetName)
 					return err
@@ -215,19 +228,19 @@ func createInfraDaemonsets(ctx context.Context, client client.Client, instance *
 				log.Error(err, "Error getting Daemonset:", ospDaemonSetName)
 				return err
 			} else {
-				// Updating the Daemonset ospDaemonSetName
+				// Updating the Daemonset
 				ds := newDaemonSet(instance, originDaemonSet, ospDaemonSetName, dsInfo.Namespace)
-
-				// Updating existing
 				// Merge the desired object with what actually exists
 				if !equality.Semantic.DeepEqual(ospDaemonSet.Spec, ds.Spec) {
-					if err := client.Update(ctx, ds); err != nil {
+					//if err := client.Update(ctx, ds); err != nil {
+					_, err := client.AppsV1().DaemonSets(dsInfo.Namespace).Update(ds)
+					if err != nil {
 						log.Error(err, "could not update object", ospDaemonSetName)
 						return err
 					}
 				}
 			}
-		}*/
+		}
 	}
 	return nil
 }
